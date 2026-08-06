@@ -35,7 +35,7 @@ export default function Home() {
     }
   }, []);
 
-  // Mesajları getir ve her 1.5 saniyede bir yeni cevap gelmiş mi kontrol et
+  // Mesajları getir ve her 1.5 saniyede bir yeni cevap gelmiş mi kontrol e
   useEffect(() => {
     if (!convId) return;
 
