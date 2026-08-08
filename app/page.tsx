@@ -13,6 +13,7 @@ export default function Home() {
   const [isUploading, setIsUploading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Ziyaretçiye özel oturum (sohbet ID) oluştur veya olanı al
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -34,6 +35,7 @@ export default function Home() {
     }
   }, []);
 
+  // Mesajları getir ve her 1.5 saniyede bir kontrol et (Aşağı kaydırma tetiklemez!)
   useEffect(() => {
     if (!convId) return;
 
@@ -51,9 +53,12 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [convId]);
 
+  // Sadece ilk açılışta en alta kaydır
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (messages.length > 0 && !convId) {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [convId]);
 
   const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
   const isWaitingForResponse = lastMessage && lastMessage.sender === 'user';
@@ -68,6 +73,11 @@ export default function Home() {
       ...prev,
       { id: Date.now(), sender: 'user', content: userText, image_url: imageUrl },
     ]);
+
+    // Kullanıcı mesaj attığında otomatik olarak aşağı kaydır
+    setTimeout(() => {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
 
     await supabase.from('messages').insert([
       { conversation_id: convId, sender: 'user', content: userText, image_url: imageUrl },
@@ -105,9 +115,11 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-screen bg-[#212121] text-gray-100 font-sans">
-      <div className="flex-1 flex flex-col h-full relative max-w-3xl mx-auto w-full">
-        <div className="flex-1 overflow-y-auto p-4 pb-32 space-y-6">
+    <div className="flex h-[100dvh] w-full overflow-hidden bg-[#212121] text-gray-100 font-sans fixed inset-0">
+      <div className="flex-1 flex flex-col h-full max-w-3xl mx-auto w-full relative">
+        
+        {/* Mesaj Listesi (Artık yukarı kaydırıp inceleyebilirsin, otomatik aşağı atmaz) */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-6">
           {messages.length === 0 && (
             <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-3 mt-20">
               <Bot size={48} className="text-emerald-500" />
@@ -149,7 +161,8 @@ export default function Home() {
           <div ref={chatEndRef} />
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#212121] via-[#212121] to-transparent pt-6 pb-6 px-4">
+        {/* Mesaj Input Kutusu (Sabit ve taşma yapmayan yapı) */}
+        <div className="p-4 bg-[#212121] shrink-0 border-t border-white/5">
           <div className="relative bg-[#303030] rounded-2xl p-2 flex items-center border border-white/10 focus-within:border-white/30 transition shadow-lg">
             <label className={`p-3 text-gray-400 ${isWaitingForResponse || isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:text-white cursor-pointer'} transition`}>
               {isUploading ? <Loader2 size={20} className="animate-spin text-emerald-500" /> : <ImageIcon size={20} />}
@@ -194,6 +207,7 @@ export default function Home() {
             </button>
           </div>
         </div>
+
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ export default function AdminPage() {
   const [reply, setReply] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Sohbet listesini getir (Her 2 saniyede bir)
   useEffect(() => {
     const fetchConversations = async () => {
       const { data } = await supabase.from('conversations').select('*').order('created_at', { ascending: false });
@@ -22,6 +23,7 @@ export default function AdminPage() {
     return () => clearInterval(interval);
   }, []);
 
+  // Seçilen sohbetin mesajlarını getir (Sürekli aşağı kaydırma tetiklemez!)
   useEffect(() => {
     if (!selectedConvId) return;
 
@@ -35,9 +37,12 @@ export default function AdminPage() {
     return () => clearInterval(interval);
   }, [selectedConvId]);
 
+  // Sadece ilk sohbet seçildiğinde veya admin mesaj gönderdiğinde aşağı kaydır
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (messages.length > 0 && selectedConvId) {
+      // Sadece ilk açılışta veya yeni mesajda tetiklenir
+    }
+  }, [selectedConvId]);
 
   const handleAdminSend = async () => {
     if (!reply.trim() || !selectedConvId) return;
@@ -47,15 +52,22 @@ export default function AdminPage() {
 
     setMessages((prev) => [...prev, { id: Date.now(), sender: 'ai', content: replyText }]);
 
+    // Mesaj gönderildiğinde aşağı kaydır
+    setTimeout(() => {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+
     await supabase.from('messages').insert([
       { conversation_id: selectedConvId, sender: 'ai', content: replyText }
     ]);
   };
 
   return (
-    <div className="flex h-screen bg-[#121212] text-gray-100 font-sans">
-      <div className="w-80 bg-[#1e1e1e] border-r border-white/10 flex flex-col">
-        <div className="p-4 border-b border-white/10 flex items-center gap-2 bg-red-950/30 text-red-400 font-bold">
+    <div className="flex h-[100dvh] w-full overflow-hidden bg-[#121212] text-gray-100 font-sans fixed inset-0">
+      
+      {/* Sol Sidebar - Sohbet Listesi */}
+      <div className="w-80 bg-[#1e1e1e] border-r border-white/10 flex flex-col shrink-0 h-full">
+        <div className="p-4 border-b border-white/10 flex items-center gap-2 bg-red-950/30 text-red-400 font-bold shrink-0">
           <ShieldAlert size={20} /> Gizli Yönetim Paneli
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -78,14 +90,16 @@ export default function AdminPage() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col h-full relative">
+      {/* Sağ Kısım - Mesajlaşma Alanı */}
+      <div className="flex-1 flex flex-col h-full relative overflow-hidden">
         {selectedConvId ? (
           <>
-            <div className="bg-[#1e1e1e] p-4 border-b border-white/10 text-sm font-semibold text-emerald-400 flex items-center gap-2">
+            <div className="bg-[#1e1e1e] p-4 border-b border-white/10 text-sm font-semibold text-emerald-400 flex items-center gap-2 shrink-0">
               <Bot size={18} /> Yapay Zeka Adına Cevap Veriyorsunuz
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 pb-32">
+            {/* Mesaj Listesi (Yukarıdaki yazıları okuyabilirsin, otomatik aşağı yapıştırmaz) */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {messages.map((m) => (
                 <div key={m.id} className={`flex gap-3 ${m.sender === 'user' ? 'justify-start' : 'justify-end'}`}>
                   {m.sender === 'user' && (
@@ -107,7 +121,8 @@ export default function AdminPage() {
               <div ref={chatEndRef} />
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 bg-[#1e1e1e] p-4 border-t border-white/10">
+            {/* Input Alanı (Sabit ve esnek yapı) */}
+            <div className="bg-[#1e1e1e] p-4 border-t border-white/10 shrink-0">
               <div className="max-w-4xl mx-auto flex gap-2">
                 <input
                   type="text"
@@ -129,6 +144,7 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+
     </div>
   );
 }
