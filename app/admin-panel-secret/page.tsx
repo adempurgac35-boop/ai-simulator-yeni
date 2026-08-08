@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Send, Bot, MessageSquare, ShieldAlert } from 'lucide-react';
+import { Send, Bot, MessageSquare, ShieldAlert, ArrowLeft } from 'lucide-react';
 
 export default function AdminPage() {
   const [conversations, setConversations] = useState<any[]>([]);
@@ -23,7 +23,7 @@ export default function AdminPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Seçilen sohbetin mesajlarını getir (Sürekli aşağı kaydırma tetiklemez!)
+  // Seçilen sohbetin mesajlarını getir
   useEffect(() => {
     if (!selectedConvId) return;
 
@@ -37,13 +37,6 @@ export default function AdminPage() {
     return () => clearInterval(interval);
   }, [selectedConvId]);
 
-  // Sadece ilk sohbet seçildiğinde veya admin mesaj gönderdiğinde aşağı kaydır
-  useEffect(() => {
-    if (messages.length > 0 && selectedConvId) {
-      // Sadece ilk açılışta veya yeni mesajda tetiklenir
-    }
-  }, [selectedConvId]);
-
   const handleAdminSend = async () => {
     if (!reply.trim() || !selectedConvId) return;
 
@@ -52,7 +45,6 @@ export default function AdminPage() {
 
     setMessages((prev) => [...prev, { id: Date.now(), sender: 'ai', content: replyText }]);
 
-    // Mesaj gönderildiğinde aşağı kaydır
     setTimeout(() => {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
@@ -65,8 +57,8 @@ export default function AdminPage() {
   return (
     <div className="flex h-[100dvh] w-full overflow-hidden bg-[#121212] text-gray-100 font-sans fixed inset-0">
       
-      {/* Sol Sidebar - Sohbet Listesi */}
-      <div className="w-80 bg-[#1e1e1e] border-r border-white/10 flex flex-col shrink-0 h-full">
+      {/* Sol Sidebar - Sohbet Listesi (Mobilde bir sohbet seçildiyse gizlenir, masaüstünde hep görünür) */}
+      <div className={`w-full md:w-80 bg-[#1e1e1e] border-r border-white/10 flex flex-col shrink-0 h-full ${selectedConvId ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-4 border-b border-white/10 flex items-center gap-2 bg-red-950/30 text-red-400 font-bold shrink-0">
           <ShieldAlert size={20} /> Gizli Yönetim Paneli
         </div>
@@ -90,16 +82,24 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Sağ Kısım - Mesajlaşma Alanı */}
-      <div className="flex-1 flex flex-col h-full relative overflow-hidden">
+      {/* Sağ Kısım - Mesajlaşma Alanı (Mobilde sohbet seçilmediyse gizlenir, seçildiyse tam ekran olur) */}
+      <div className={`flex-1 flex flex-col h-full relative overflow-hidden bg-[#121212] ${!selectedConvId ? 'hidden md:flex' : 'flex'}`}>
         {selectedConvId ? (
           <>
-            <div className="bg-[#1e1e1e] p-4 border-b border-white/10 text-sm font-semibold text-emerald-400 flex items-center gap-2 shrink-0">
+            {/* Üst Bar (Mobilde listeye geri dönme butonu eklendi) */}
+            <div className="bg-[#1e1e1e] p-4 border-b border-white/10 text-sm font-semibold text-emerald-400 flex items-center gap-3 shrink-0">
+              <button 
+                onClick={() => setSelectedConvId(null)} 
+                className="md:hidden p-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20 transition"
+                title="Geri Dön"
+              >
+                <ArrowLeft size={18} />
+              </button>
               <Bot size={18} /> Yapay Zeka Adına Cevap Veriyorsunuz
             </div>
 
-            {/* Mesaj Listesi (Yukarıdaki yazıları okuyabilirsin, otomatik aşağı yapıştırmaz) */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {/* Mesaj Listesi */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
               {messages.map((m) => (
                 <div key={m.id} className={`flex gap-3 ${m.sender === 'user' ? 'justify-start' : 'justify-end'}`}>
                   {m.sender === 'user' && (
@@ -107,7 +107,7 @@ export default function AdminPage() {
                       USER
                     </div>
                   )}
-                  <div className={`max-w-[70%] p-3.5 rounded-2xl text-sm ${m.sender === 'user' ? 'bg-[#2a2a2a] text-white border border-white/10' : 'bg-emerald-700 text-white'}`}>
+                  <div className={`max-w-[80%] md:max-w-[70%] p-3.5 rounded-2xl text-sm ${m.sender === 'user' ? 'bg-[#2a2a2a] text-white border border-white/10' : 'bg-emerald-700 text-white'}`}>
                     {m.image_url && <img src={m.image_url} alt="Görsel" className="max-w-xs max-h-56 rounded-lg mb-2 object-cover" />}
                     {m.content && <p className="whitespace-pre-wrap">{m.content}</p>}
                   </div>
@@ -121,8 +121,8 @@ export default function AdminPage() {
               <div ref={chatEndRef} />
             </div>
 
-            {/* Input Alanı (Sabit ve esnek yapı) */}
-            <div className="bg-[#1e1e1e] p-4 border-t border-white/10 shrink-0">
+            {/* Input Alanı */}
+            <div className="bg-[#1e1e1e] p-3 md:p-4 border-t border-white/10 shrink-0">
               <div className="max-w-4xl mx-auto flex gap-2">
                 <input
                   type="text"
@@ -132,14 +132,14 @@ export default function AdminPage() {
                   placeholder="Cevabı Yaz"
                   className="flex-1 bg-[#2a2a2a] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-emerald-500 transition"
                 />
-                <button onClick={handleAdminSend} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold transition flex items-center gap-2">
-                  <Send size={16} /> AI Olarak Gönder
+                <button onClick={handleAdminSend} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 md:px-6 py-3 rounded-xl font-bold transition flex items-center gap-2 shrink-0">
+                  <Send size={16} /> <span className="hidden sm:inline">AI Olarak</span> Gönder
                 </button>
               </div>
             </div>
           </>
         ) : (
-          <div className="h-full flex items-center justify-center text-gray-500">
+          <div className="h-full flex items-center justify-center text-gray-500 p-6 text-center">
             Yanıtlamak için sol taraftan bir sohbet seçin.
           </div>
         )}
