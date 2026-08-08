@@ -1,19 +1,18 @@
 'use client';
 
-// Bu sayfanın sunucuda prerender edilmesini engeller, sadece tarayıcıda çalışmasını sağlar
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Send, Image as ImageIcon, Bot, User } from 'lucide-react';
+import { Send, Image as ImageIcon, Bot, User, Loader2 } from 'lucide-react';
 
 export default function Home() {
   const [convId, setConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Ziyaretçiye özel oturum (sohbet ID) oluştur veya olanı al
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -35,7 +34,6 @@ export default function Home() {
     }
   }, []);
 
-  // Mesajları getir ve her 1.5 saniyede bir yeni cevap gelmiş mi kontrol e
   useEffect(() => {
     if (!convId) return;
 
@@ -57,7 +55,6 @@ export default function Home() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Son mesaj kullanıcıdan mı geldi kontrolü (True ise AI/Yönetici düşünüyor demektir)
   const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
   const isWaitingForResponse = lastMessage && lastMessage.sender === 'user';
 
@@ -67,37 +64,49 @@ export default function Home() {
     const userText = input;
     setInput('');
 
-    // Ekrana anında ekle
     setMessages((prev) => [
       ...prev,
       { id: Date.now(), sender: 'user', content: userText, image_url: imageUrl },
     ]);
 
-    // Veritabanına kaydet
     await supabase.from('messages').insert([
       { conversation_id: convId, sender: 'user', content: userText, image_url: imageUrl },
     ]);
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isWaitingForResponse) return;
+    if (isWaitingForResponse || isUploading) return;
     const file = e.target.files?.[0];
     if (!file || !convId) return;
 
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}.${fileExt}`;
+    try {
+      setIsUploading(true);
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
 
-    const { data } = await supabase.storage.from('chat-images').upload(fileName, file);
-    if (data) {
+      const { error: uploadError } = await supabase.storage.from('chat-images').upload(fileName, file);
+      
+      if (uploadError) {
+        alert('Fotoğraf yüklenirken hata oluştu: ' + uploadError.message);
+        return;
+      }
+
       const { data: publicUrlData } = supabase.storage.from('chat-images').getPublicUrl(fileName);
-      handleSend(publicUrlData.publicUrl);
+      
+      if (publicUrlData?.publicUrl) {
+        await handleSend(publicUrlData.publicUrl);
+      }
+    } catch (err) {
+      console.error('Yükleme hatası:', err);
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
     }
   };
 
   return (
     <div className="flex h-screen bg-[#212121] text-gray-100 font-sans">
       <div className="flex-1 flex flex-col h-full relative max-w-3xl mx-auto w-full">
-        {/* Mesaj Listesi */}
         <div className="flex-1 overflow-y-auto p-4 pb-32 space-y-6">
           {messages.length === 0 && (
             <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-3 mt-20">
@@ -140,12 +149,17 @@ export default function Home() {
           <div ref={chatEndRef} />
         </div>
 
-        {/* Mesaj Input Kutusu */}
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#212121] via-[#212121] to-transparent pt-6 pb-6 px-4">
           <div className="relative bg-[#303030] rounded-2xl p-2 flex items-center border border-white/10 focus-within:border-white/30 transition shadow-lg">
-            <label className={`p-3 text-gray-400 ${isWaitingForResponse ? 'opacity-50 cursor-not-allowed' : 'hover:text-white cursor-pointer'} transition`}>
-              <ImageIcon size={20} />
-              <input type="file" accept="image/*" onChange={handleImageUpload} disabled={isWaitingForResponse} className="hidden" />
+            <label className={`p-3 text-gray-400 ${isWaitingForResponse || isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:text-white cursor-pointer'} transition`}>
+              {isUploading ? <Loader2 size={20} className="animate-spin text-emerald-500" /> : <ImageIcon size={20} />}
+              <input 
+                type="file" 
+                accept="image/*" 
+                onChange={handleImageUpload} 
+                disabled={isWaitingForResponse || isUploading} 
+                className="hidden" 
+              />
             </label>
             <textarea
               value={input}
@@ -156,22 +170,21 @@ export default function Home() {
                   if (!isWaitingForResponse) handleSend();
                 }
               }}
-              placeholder={isWaitingForResponse ? "Yönetici yanıtı bekleniyor..." : "Yapay zekaya mesaj yazın..."}
-              disabled={isWaitingForResponse}
+              placeholder={isWaitingForResponse ? "Yönetici yanıtı bekleniyor..." : isUploading ? "Fotoğraf yükleniyor..." : "Yapay zekaya mesaj yazın..."}
+              disabled={isWaitingForResponse || isUploading}
               className="flex-1 bg-transparent border-none outline-none text-sm text-white resize-none px-2 max-h-32 min-h-[44px] pt-3 disabled:opacity-50"
               rows={1}
             />
             <button
               onClick={() => handleSend()}
               className={`p-3 rounded-xl transition m-1 flex items-center justify-center ${
-                isWaitingForResponse 
+                isWaitingForResponse || isUploading
                   ? 'bg-gray-600 text-gray-300 cursor-not-allowed' 
                   : 'bg-white text-black hover:opacity-80'
               }`}
-              disabled={!input.trim() || isWaitingForResponse}
+              disabled={(!input.trim() && !isUploading) || isWaitingForResponse || isUploading}
             >
               {isWaitingForResponse ? (
-                /* Gönderdiğin görseldeki tarza benzer içi boş yuvarlatılmış kare ikon */
                 <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="4" y="4" width="16" height="16" rx="4" ry="4" />
                 </svg>
