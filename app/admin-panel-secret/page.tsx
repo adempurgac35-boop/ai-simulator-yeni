@@ -2,35 +2,16 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Send, Bot, MessageSquare, ShieldAlert, ArrowLeft, BellRing } from 'lucide-react';
+import { Send, Bot, MessageSquare, ShieldAlert, ArrowLeft } from 'lucide-react';
 
 export default function AdminPage() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [reply, setReply] = useState('');
-  const [newActivity, setNewActivity] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Ses çalma fonksiyonu (Yeni mesaj geldiğinde uyarı vermesi için)
-  const playNotificationSound = () => {
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(587.33, audioContext.currentTime); // D5 nota
-      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      oscillator.start();
-      oscillator.stop(audioContext.currentTime + 0.15);
-    } catch (e) {
-      // Tarayıcı ses engeline takılırsa sessizce devam eder
-    }
-  };
-
-  // Sohbet listesini getir ve Supabase Realtime ile anlık dinle (25 kişiden gelenleri anında yakalar)
+  // Sohbet listesini getir (Her 2 saniyede bir)
   useEffect(() => {
     const fetchConversations = async () => {
       const { data } = await supabase.from('conversations').select('*').order('created_at', { ascending: false });
@@ -38,28 +19,8 @@ export default function AdminPage() {
     };
 
     fetchConversations();
-
-    // Supabase Realtime Kanalı: Mesajlar tablosunu dinle
-    const channel = supabase
-      .channel('admin-realtime-messages')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages' },
-        (payload) => {
-          const newMessage = payload.new;
-          // Eğer mesajı kullanıcı attıysa bildirim/ses çal
-          if (newMessage.sender === 'user') {
-            playNotificationSound();
-            setNewActivity(newMessage.conversation_id);
-            fetchConversations(); // Listeyi güncelle
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    const interval = setInterval(fetchConversations, 2000);
+    return () => clearInterval(interval);
   }, []);
 
   // Seçilen sohbetin mesajlarını getir
@@ -96,55 +57,36 @@ export default function AdminPage() {
   return (
     <div className="flex h-[100dvh] w-full overflow-hidden bg-[#121212] text-gray-100 font-sans fixed inset-0">
       
-      {/* Sol Sidebar - Sohbet Listesi */}
+      {/* Sol Sidebar - Sohbet Listesi (Mobilde bir sohbet seçildiyse gizlenir, masaüstünde hep görünür) */}
       <div className={`w-full md:w-80 bg-[#1e1e1e] border-r border-white/10 flex flex-col shrink-0 h-full ${selectedConvId ? 'hidden md:flex' : 'flex'}`}>
-        <div className="p-4 border-b border-white/10 flex items-center justify-between bg-red-950/30 text-red-400 font-bold shrink-0">
-          <div className="flex items-center gap-2">
-            <ShieldAlert size={20} /> Yönetim Paneli
-          </div>
-          <div className="flex items-center gap-1 text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-full">
-            <BellRing size={12} /> Canlı Dinlemede
-          </div>
+        <div className="p-4 border-b border-white/10 flex items-center gap-2 bg-red-950/30 text-red-400 font-bold shrink-0">
+          <ShieldAlert size={20} /> Gizli Yönetim Paneli
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           <p className="text-xs text-gray-500 font-bold px-3 py-2">Gelen Sohbetler</p>
-          {conversations.map((c) => {
-            const isUnread = newActivity === c.id && selectedConvId !== c.id;
-            return (
-              <button
-                key={c.id}
-                onClick={() => {
-                  setSelectedConvId(c.id);
-                  if (newActivity === c.id) setNewActivity(null);
-                }}
-                className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition ${
-                  selectedConvId === c.id 
-                    ? 'bg-emerald-600/20 border border-emerald-500/30 text-emerald-300' 
-                    : isUnread 
-                    ? 'bg-red-500/20 border border-red-500/40 text-white animate-pulse' 
-                    : 'hover:bg-white/5 text-gray-300'
-                }`}
-              >
-                <div className="flex items-center gap-3 truncate">
-                  <MessageSquare size={18} className={isUnread ? 'text-red-400' : ''} />
-                  <div className="truncate">
-                    <p className="text-sm font-medium">Kullanıcı #{c.id.slice(0, 5)}</p>
-                    <p className="text-xs text-gray-500">{new Date(c.created_at).toLocaleTimeString()}</p>
-                  </div>
-                </div>
-                {isUnread && (
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0"></span>
-                )}
-              </button>
-            );
-          })}
+          {conversations.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setSelectedConvId(c.id)}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition ${
+                selectedConvId === c.id ? 'bg-emerald-600/20 border border-emerald-500/30 text-emerald-300' : 'hover:bg-white/5 text-gray-300'
+              }`}
+            >
+              <MessageSquare size={18} />
+              <div className="truncate">
+                <p className="text-sm font-medium">Kullanıcı #{c.id.slice(0, 5)}</p>
+                <p className="text-xs text-gray-500">{new Date(c.created_at).toLocaleTimeString()}</p>
+              </div>
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Sağ Kısım - Mesajlaşma Alanı */}
+      {/* Sağ Kısım - Mesajlaşma Alanı (Mobilde sohbet seçilmediyse gizlenir, seçildiyse tam ekran olur) */}
       <div className={`flex-1 flex flex-col h-full relative overflow-hidden bg-[#121212] ${!selectedConvId ? 'hidden md:flex' : 'flex'}`}>
         {selectedConvId ? (
           <>
+            {/* Üst Bar (Mobilde listeye geri dönme butonu eklendi) */}
             <div className="bg-[#1e1e1e] p-4 border-b border-white/10 text-sm font-semibold text-emerald-400 flex items-center gap-3 shrink-0">
               <button 
                 onClick={() => setSelectedConvId(null)} 
@@ -156,6 +98,7 @@ export default function AdminPage() {
               <Bot size={18} /> Yapay Zeka Adına Cevap Veriyorsunuz
             </div>
 
+            {/* Mesaj Listesi */}
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
               {messages.map((m) => (
                 <div key={m.id} className={`flex gap-3 ${m.sender === 'user' ? 'justify-start' : 'justify-end'}`}>
@@ -178,6 +121,7 @@ export default function AdminPage() {
               <div ref={chatEndRef} />
             </div>
 
+            {/* Input Alanı */}
             <div className="bg-[#1e1e1e] p-3 md:p-4 border-t border-white/10 shrink-0">
               <div className="max-w-4xl mx-auto flex gap-2">
                 <input
